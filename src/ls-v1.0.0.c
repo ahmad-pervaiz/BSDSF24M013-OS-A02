@@ -1,8 +1,9 @@
 /*
-- Programming Assignment 02: ls-v1.2.0 (Column Display - Down Then Across)
+- Programming Assignment 02: ls-v1.3.0 (Horizontal Column Display -x)
 - Usage:
 *        $ ./bin/ls
 *        $ ./bin/ls -l
+*        $ ./bin/ls -x
 */
 
 #include <stdio.h>
@@ -20,32 +21,38 @@
 
 extern int errno;
 
-void do_ls(const char *dir, int l_flag);
+void do_ls(const char *dir, int l_flag, int x_flag);
 void print_long_format(const char *path, const char *filename);
 void print_column_format(char **files, int count, int max_len);
+void print_horizontal_format(char **files, int count, int max_len);
 void mode_to_letters(mode_t mode, char str[]);
 
 int main(int argc, char *argv[])
 {
     int opt;
     int l_flag = 0;
+    int x_flag = 0;
 
-    while ((opt = getopt(argc, argv, "l")) != -1)
+    // 1. Updated getopt to accept both 'l' and 'x'
+    while ((opt = getopt(argc, argv, "lx")) != -1)
     {
         switch (opt)
         {
             case 'l':
                 l_flag = 1;
                 break;
+            case 'x':
+                x_flag = 1;
+                break;
             default:
-                fprintf(stderr, "Usage: %s [-l] [directory...]\n", argv[0]);
+                fprintf(stderr, "Usage: %s [-l] [-x] [directory...]\n", argv[0]);
                 exit(EXIT_FAILURE);
         }
     }
 
     if (optind == argc)
     {
-        do_ls(".", l_flag);
+        do_ls(".", l_flag, x_flag);
     }
     else
     {
@@ -55,7 +62,7 @@ int main(int argc, char *argv[])
             {
                 printf("%s:\n", argv[i]);
             }
-            do_ls(argv[i], l_flag);
+            do_ls(argv[i], l_flag, x_flag);
             if (i < argc - 1)
             {
                 printf("\n");
@@ -66,7 +73,7 @@ int main(int argc, char *argv[])
     return 0;
 }
 
-void do_ls(const char *dir, int l_flag)
+void do_ls(const char *dir, int l_flag, int x_flag)
 {
     struct dirent *entry;
     DIR *dp = opendir(dir);
@@ -89,7 +96,6 @@ void do_ls(const char *dir, int l_flag)
     }
     else
     {
-        // Feature 3: Store filenames in dynamic array for grid rendering
         int capacity = 100;
         int count = 0;
         int max_len = 0;
@@ -117,7 +123,16 @@ void do_ls(const char *dir, int l_flag)
 
         if (count > 0)
         {
-            print_column_format(filenames, count, max_len);
+            if (x_flag)
+            {
+                // Feature 4: Horizontal (across then down)
+                print_horizontal_format(filenames, count, max_len);
+            }
+            else
+            {
+                // Feature 3: Default (down then across)
+                print_column_format(filenames, count, max_len);
+            }
 
             for (int i = 0; i < count; i++)
             {
@@ -135,12 +150,42 @@ void do_ls(const char *dir, int l_flag)
     closedir(dp);
 }
 
+void print_horizontal_format(char **files, int count, int max_len)
+{
+    struct winsize w;
+    int term_width = 80;
+
+    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &w) == 0 && w.ws_col > 0)
+    {
+        term_width = w.ws_col;
+    }
+
+    int spacing = 2;
+    int col_width = max_len + spacing;
+    int cols = term_width / col_width;
+
+    if (cols < 1)
+        cols = 1;
+
+    for (int i = 0; i < count; i++)
+    {
+        // Print entries left to right
+        if ((i + 1) % cols == 0 || i == count - 1)
+        {
+            printf("%s\n", files[i]);
+        }
+        else
+        {
+            printf("%-*s", col_width, files[i]);
+        }
+    }
+}
+
 void print_column_format(char **files, int count, int max_len)
 {
     struct winsize w;
-    int term_width = 80; // Default fallback
+    int term_width = 80;
 
-    // Get terminal window dimensions
     if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &w) == 0 && w.ws_col > 0)
     {
         term_width = w.ws_col;
@@ -155,7 +200,6 @@ void print_column_format(char **files, int count, int max_len)
 
     int rows = (count + cols - 1) / cols;
 
-    // Render grid down then across
     for (int r = 0; r < rows; r++)
     {
         for (int c = 0; c < cols; c++)

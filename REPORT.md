@@ -52,3 +52,29 @@ This mapping forces items in the same column to increment vertically before movi
 * **Limitations of a Fixed-Width Fallback:**
   1. **Wasted Space on Large Displays:** On wide modern terminal windows (e.g., 140+ columns), an 80-column fixed layout leaves significant unused horizontal space and forces unnecessary vertical scrolling.
   2. **Line Wrapping on Small Displays:** On narrow terminal windows (e.g., split-screen pane of 60 columns), an 80-column layout exceeds display limits, causing lines to wrap awkwardly and ruin vertical alignment.
+
+
+  ## Feature 4: Horizontal Column Display (`ls-v1.3.0`)
+
+### Question 1
+**Compare the algorithmic complexity and implementation difficulty of the default column display (down then across) vs. the `-x` horizontal column display (across then down). Why is the horizontal layout simpler to implement?**
+
+**Answer:**
+* **Algorithmic Complexity:** Both implementations operate in $O(N)$ time complexity, where $N$ is the number of directory entries.
+* **Implementation Simplicity of Horizontal Layout (`-x`):**
+  The horizontal layout prints entries in natural array order ($0, 1, 2, \dots, N-1$). Since terminal output Streams line-by-line horizontally, printing item $i$ followed by item $i+1$ directly matches standard terminal streaming. The program only needs a single loop with a modulus check `(i + 1) % cols == 0` to print a newline `\n`.
+* **Complexity of Default Vertical Layout:**
+  The vertical layout requires mapping line-by-line output to vertical columns using formula calculations $\text{index} = r + (c \times \text{rows})$ across nested row and column loops. It also requires edge-case handling for incomplete final columns.
+
+---
+
+### Question 2
+**How does flag precedence work when conflicting flags (such as `-l` and `-x`) are passed together? How is this handled in your implementation?**
+
+**Answer:**
+In standard GNU `ls`, when conflicting options are provided, the last specified option on the command line typically takes precedence, or flags combine depending on functional scope.
+
+In this implementation:
+1. `-l` overrides column formatting (`-x` or default) because long listing requires one detailed item per line.
+2. If `-l` is present (`l_flag == 1`), `do_ls` executes `print_long_format`.
+3. If `-l` is not present, `do_ls` checks `x_flag`: calling `print_horizontal_format` if `-x` is set, or falling back to `print_column_format` (default vertical layout) otherwise.
