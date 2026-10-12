@@ -1,5 +1,5 @@
 /*
-- Programming Assignment 02: ls-v1.3.0 (Horizontal Column Display -x)
+- Programming Assignment 02: ls-v1.4.0 (Alphabetical Sort)
 - Usage:
 *        $ ./bin/ls
 *        $ ./bin/ls -l
@@ -26,6 +26,7 @@ void print_long_format(const char *path, const char *filename);
 void print_column_format(char **files, int count, int max_len);
 void print_horizontal_format(char **files, int count, int max_len);
 void mode_to_letters(mode_t mode, char str[]);
+int compare_filenames(const void *a, const void *b);
 
 int main(int argc, char *argv[])
 {
@@ -33,7 +34,6 @@ int main(int argc, char *argv[])
     int l_flag = 0;
     int x_flag = 0;
 
-    // 1. Updated getopt to accept both 'l' and 'x'
     while ((opt = getopt(argc, argv, "lx")) != -1)
     {
         switch (opt)
@@ -73,6 +73,14 @@ int main(int argc, char *argv[])
     return 0;
 }
 
+// Comparison function passed to qsort()
+int compare_filenames(const void *a, const void *b)
+{
+    const char *str1 = *(const char **)a;
+    const char *str2 = *(const char **)b;
+    return strcmp(str1, str2);
+}
+
 void do_ls(const char *dir, int l_flag, int x_flag)
 {
     struct dirent *entry;
@@ -84,62 +92,29 @@ void do_ls(const char *dir, int l_flag, int x_flag)
         return;
     }
 
-    if (l_flag)
+    int capacity = 100;
+    int count = 0;
+    int max_len = 0;
+    char **filenames = malloc(capacity * sizeof(char *));
+
+    errno = 0;
+    while ((entry = readdir(dp)) != NULL)
     {
-        errno = 0;
-        while ((entry = readdir(dp)) != NULL)
+        if (entry->d_name[0] == '.')
+            continue;
+
+        int len = strlen(entry->d_name);
+        if (len > max_len)
+            max_len = len;
+
+        if (count >= capacity)
         {
-            if (entry->d_name[0] == '.')
-                continue;
-            print_long_format(dir, entry->d_name);
-        }
-    }
-    else
-    {
-        int capacity = 100;
-        int count = 0;
-        int max_len = 0;
-        char **filenames = malloc(capacity * sizeof(char *));
-
-        errno = 0;
-        while ((entry = readdir(dp)) != NULL)
-        {
-            if (entry->d_name[0] == '.')
-                continue;
-
-            int len = strlen(entry->d_name);
-            if (len > max_len)
-                max_len = len;
-
-            if (count >= capacity)
-            {
-                capacity *= 2;
-                filenames = realloc(filenames, capacity * sizeof(char *));
-            }
-
-            filenames[count] = strdup(entry->d_name);
-            count++;
+            capacity *= 2;
+            filenames = realloc(filenames, capacity * sizeof(char *));
         }
 
-        if (count > 0)
-        {
-            if (x_flag)
-            {
-                // Feature 4: Horizontal (across then down)
-                print_horizontal_format(filenames, count, max_len);
-            }
-            else
-            {
-                // Feature 3: Default (down then across)
-                print_column_format(filenames, count, max_len);
-            }
-
-            for (int i = 0; i < count; i++)
-            {
-                free(filenames[i]);
-            }
-        }
-        free(filenames);
+        filenames[count] = strdup(entry->d_name);
+        count++;
     }
 
     if (errno != 0)
@@ -148,6 +123,37 @@ void do_ls(const char *dir, int l_flag, int x_flag)
     }
 
     closedir(dp);
+
+    if (count > 0)
+    {
+        // 1. Sort directory entries alphabetically using qsort
+        qsort(filenames, count, sizeof(char *), compare_filenames);
+
+        // 2. Render pre-sorted entries in requested format
+        if (l_flag)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                print_long_format(dir, filenames[i]);
+            }
+        }
+        else if (x_flag)
+        {
+            print_horizontal_format(filenames, count, max_len);
+        }
+        else
+        {
+            print_column_format(filenames, count, max_len);
+        }
+
+        // 3. Free dynamically allocated memory
+        for (int i = 0; i < count; i++)
+        {
+            free(filenames[i]);
+        }
+    }
+
+    free(filenames);
 }
 
 void print_horizontal_format(char **files, int count, int max_len)
@@ -169,7 +175,6 @@ void print_horizontal_format(char **files, int count, int max_len)
 
     for (int i = 0; i < count; i++)
     {
-        // Print entries left to right
         if ((i + 1) % cols == 0 || i == count - 1)
         {
             printf("%s\n", files[i]);

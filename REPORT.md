@@ -78,3 +78,29 @@ In this implementation:
 1. `-l` overrides column formatting (`-x` or default) because long listing requires one detailed item per line.
 2. If `-l` is present (`l_flag == 1`), `do_ls` executes `print_long_format`.
 3. If `-l` is not present, `do_ls` checks `x_flag`: calling `print_horizontal_format` if `-x` is set, or falling back to `print_column_format` (default vertical layout) otherwise.
+
+
+## Feature 5: Alphabetical Sort (`ls-v1.4.0`)
+
+### Question 1
+**Why is it necessary to read all directory entries into memory before you can sort them? What are the potential drawbacks of this approach for directories containing millions of files?**
+
+**Answer:**
+* **Necessity:** File systems store directory structures in underlying disk blocks or tree indices in non-alphabetical or creation-based order. `readdir()` yields entries sequentially as stored on disk. Sorting requires global knowledge of the complete list of elements, so all items must be loaded into memory before applying a sorting algorithm like `qsort()`.
+* **Drawbacks for Large Directories:**
+  1. **High Memory Overhead:** Storing millions of string paths consumes significant heap memory ($O(N)$ memory complexity), leading to potential RAM exhaustion or out-of-memory crashes.
+  2. **Latency & Execution Delays:** Reading and sorting millions of files in memory causes noticeable UI blocking before any output can be rendered to the user.
+
+---
+
+### Question 2
+**Explain the purpose and signature of the comparison function required by `qsort()`. How does it work, and why must it take `const void *` arguments?**
+
+**Answer:**
+* **Function Signature:** `int compare_filenames(const void *a, const void *b)`
+* **Purpose:** `qsort()` is a generic sorting algorithm designed to sort arrays of any data type. Because `qsort()` operates on raw byte pointers, it relies on a user-provided comparison function to evaluate whether element $A$ is smaller than, equal to, or greater than element $B$.
+* **How It Works:** Inside the comparator function, the arguments are cast from generic generic pointers (`const void *`) to string pointers (`const char **`). Deriving the underlying strings allows `strcmp()` to perform lexicographical comparison:
+  * Returns `< 0` if string $A$ precedes string $B$.
+  * Returns `0` if string $A$ equals string $B$.
+  * Returns `> 0` if string $A$ follows string $B$.
+* **Why `const void *` arguments:** Generic C interface design requires `void *` so `qsort()` works on arbitrary structures. The `const` modifier ensures `qsort()` does not modify the element memory contents while evaluating comparisons.
