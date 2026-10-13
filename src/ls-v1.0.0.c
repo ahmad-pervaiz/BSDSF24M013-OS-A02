@@ -1,9 +1,9 @@
 /*
-- Programming Assignment 02: ls-v1.5.0 (Colorized Output)
+- Programming Assignment 02: ls-v1.6.0 (Recursive Listing -R)
 - Usage:
-*        $ ./bin/ls
-*        $ ./bin/ls -l
-*        $ ./bin/ls -x
+*        $ ./bin/ls -R
+*        $ ./bin/ls -l -R
+*        $ ./bin/ls -x -R
 */
 
 #include <stdio.h>
@@ -21,15 +21,14 @@
 
 extern int errno;
 
-// ANSI Color Constants
 #define COLOR_RESET   "\033[0m"
-#define COLOR_DIR     "\033[1;34m" // Bold Blue
-#define COLOR_EXEC    "\033[1;32m" // Bold Green
-#define COLOR_LNK     "\033[1;36m" // Bold Cyan
-#define COLOR_FIFO    "\033[0;33m" // Yellow
-#define COLOR_SOCK    "\033[1;35m" // Bold Magenta
+#define COLOR_DIR     "\033[1;34m"
+#define COLOR_EXEC    "\033[1;32m"
+#define COLOR_LNK     "\033[1;36m"
+#define COLOR_FIFO    "\033[0;33m"
+#define COLOR_SOCK    "\033[1;35m"
 
-void do_ls(const char *dir, int l_flag, int x_flag);
+void do_ls(const char *dir, int l_flag, int x_flag, int R_flag);
 void print_long_format(const char *path, const char *filename);
 void print_column_format(const char *dir, char **files, int count, int max_len);
 void print_horizontal_format(const char *dir, char **files, int count, int max_len);
@@ -42,8 +41,9 @@ int main(int argc, char *argv[])
     int opt;
     int l_flag = 0;
     int x_flag = 0;
+    int R_flag = 0;
 
-    while ((opt = getopt(argc, argv, "lx")) != -1)
+    while ((opt = getopt(argc, argv, "lxR")) != -1)
     {
         switch (opt)
         {
@@ -53,15 +53,18 @@ int main(int argc, char *argv[])
             case 'x':
                 x_flag = 1;
                 break;
+            case 'R':
+                R_flag = 1;
+                break;
             default:
-                fprintf(stderr, "Usage: %s [-l] [-x] [directory...]\n", argv[0]);
+                fprintf(stderr, "Usage: %s [-l] [-x] [-R] [directory...]\n", argv[0]);
                 exit(EXIT_FAILURE);
         }
     }
 
     if (optind == argc)
     {
-        do_ls(".", l_flag, x_flag);
+        do_ls(".", l_flag, x_flag, R_flag);
     }
     else
     {
@@ -71,7 +74,7 @@ int main(int argc, char *argv[])
             {
                 printf("%s:\n", argv[i]);
             }
-            do_ls(argv[i], l_flag, x_flag);
+            do_ls(argv[i], l_flag, x_flag, R_flag);
             if (i < argc - 1)
             {
                 printf("\n");
@@ -110,7 +113,7 @@ const char *get_color_code(const char *path, const char *filename)
     return COLOR_RESET;
 }
 
-void do_ls(const char *dir, int l_flag, int x_flag)
+void do_ls(const char *dir, int l_flag, int x_flag, int R_flag)
 {
     struct dirent *entry;
     DIR *dp = opendir(dir);
@@ -171,6 +174,24 @@ void do_ls(const char *dir, int l_flag, int x_flag)
         else
         {
             print_column_format(dir, filenames, count, max_len);
+        }
+
+        // Feature 7: Recursive Directory Traversal
+        if (R_flag)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                struct stat info;
+                char fullpath[1024];
+
+                snprintf(fullpath, sizeof(fullpath), "%s/%s", dir, filenames[i]);
+
+                if (lstat(fullpath, &info) == 0 && S_ISDIR(info.st_mode))
+                {
+                    printf("\n%s:\n", fullpath);
+                    do_ls(fullpath, l_flag, x_flag, R_flag);
+                }
+            }
         }
 
         for (int i = 0; i < count; i++)

@@ -125,3 +125,28 @@ It is critical to issue the reset sequence (`\033[0m`) immediately after printin
 1. **Type Inspection:** `lstat()` inspects file attributes. S_ISDIR sets Bold Blue, S_ISLNK sets Bold Cyan, S_ISFIFO sets Yellow, and S_ISSOCK sets Bold Magenta.
 2. **Executable Inspection:** If none of the special type macros match, bitwise checks evaluate executable permission flags (`S_IXUSR`, `S_IXGRP`, `S_IXOTH`).
 3. **User vs Global Executable Bit:** Checking `(st_mode & (S_IXUSR | S_IXGRP | S_IXOTH))` evaluates whether *any* user class has execute permission. To strictly verify if the *current user* can execute it, the code would compare `info.st_uid` against `geteuid()`. Standard `ls` colorizers highlight files as executable if any execution bit (`S_IXUSR`, `S_IXGRP`, or `S_IXOTH`) is set.
+
+
+## Feature 7: Recursive Listing (`ls-v1.6.0`)
+
+### Question 1
+**Explain how recursion is used to implement the `-R` flag. What is the base case for your recursive function?**
+
+**Answer:**
+Recursion is implemented by calling `do_ls()` on subdirectories discovered inside the current directory target:
+1. `do_ls()` reads and prints contents for the active path `dir`.
+2. It iterates through sorted entries and tests `S_ISDIR(info.st_mode)` via `lstat()`.
+3. For every subdirectory found, `do_ls()` recursively invokes itself with `fullpath`.
+
+**Base Case:**
+The base case is reached when a directory contains no further subdirectories (or only contains regular files/links). At this point, the loop finishes without executing further recursive calls, popping the stack frame back to the parent caller.
+
+---
+
+### Question 2
+**What critical check must be performed when processing directory entries during a recursive search to avoid an infinite loop or stack overflow?**
+
+**Answer:**
+The check `if (entry->d_name[0] == '.') continue;` filters out hidden files and critically skips `.` (current directory) and `..` (parent directory).
+
+If `.` or `..` were traversed recursively, the program would call `do_ls()` on the same folder continuously until stack frame memory was exhausted, resulting in an infinite recursion loop and a Segmentation Fault crash.
