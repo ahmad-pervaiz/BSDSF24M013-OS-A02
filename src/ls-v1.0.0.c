@@ -1,5 +1,5 @@
 /*
-- Programming Assignment 02: ls-v1.4.0 (Alphabetical Sort)
+- Programming Assignment 02: ls-v1.5.0 (Colorized Output)
 - Usage:
 *        $ ./bin/ls
 *        $ ./bin/ls -l
@@ -21,12 +21,21 @@
 
 extern int errno;
 
+// ANSI Color Constants
+#define COLOR_RESET   "\033[0m"
+#define COLOR_DIR     "\033[1;34m" // Bold Blue
+#define COLOR_EXEC    "\033[1;32m" // Bold Green
+#define COLOR_LNK     "\033[1;36m" // Bold Cyan
+#define COLOR_FIFO    "\033[0;33m" // Yellow
+#define COLOR_SOCK    "\033[1;35m" // Bold Magenta
+
 void do_ls(const char *dir, int l_flag, int x_flag);
 void print_long_format(const char *path, const char *filename);
-void print_column_format(char **files, int count, int max_len);
-void print_horizontal_format(char **files, int count, int max_len);
+void print_column_format(const char *dir, char **files, int count, int max_len);
+void print_horizontal_format(const char *dir, char **files, int count, int max_len);
 void mode_to_letters(mode_t mode, char str[]);
 int compare_filenames(const void *a, const void *b);
+const char *get_color_code(const char *path, const char *filename);
 
 int main(int argc, char *argv[])
 {
@@ -73,12 +82,32 @@ int main(int argc, char *argv[])
     return 0;
 }
 
-// Comparison function passed to qsort()
 int compare_filenames(const void *a, const void *b)
 {
     const char *str1 = *(const char **)a;
     const char *str2 = *(const char **)b;
     return strcmp(str1, str2);
+}
+
+const char *get_color_code(const char *path, const char *filename)
+{
+    struct stat info;
+    char fullpath[1024];
+
+    snprintf(fullpath, sizeof(fullpath), "%s/%s", path, filename);
+
+    if (lstat(fullpath, &info) == -1)
+    {
+        return COLOR_RESET;
+    }
+
+    if (S_ISDIR(info.st_mode))  return COLOR_DIR;
+    if (S_ISLNK(info.st_mode))  return COLOR_LNK;
+    if (S_ISFIFO(info.st_mode)) return COLOR_FIFO;
+    if (S_ISSOCK(info.st_mode)) return COLOR_SOCK;
+    if (info.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH)) return COLOR_EXEC;
+
+    return COLOR_RESET;
 }
 
 void do_ls(const char *dir, int l_flag, int x_flag)
@@ -126,10 +155,8 @@ void do_ls(const char *dir, int l_flag, int x_flag)
 
     if (count > 0)
     {
-        // 1. Sort directory entries alphabetically using qsort
         qsort(filenames, count, sizeof(char *), compare_filenames);
 
-        // 2. Render pre-sorted entries in requested format
         if (l_flag)
         {
             for (int i = 0; i < count; i++)
@@ -139,14 +166,13 @@ void do_ls(const char *dir, int l_flag, int x_flag)
         }
         else if (x_flag)
         {
-            print_horizontal_format(filenames, count, max_len);
+            print_horizontal_format(dir, filenames, count, max_len);
         }
         else
         {
-            print_column_format(filenames, count, max_len);
+            print_column_format(dir, filenames, count, max_len);
         }
 
-        // 3. Free dynamically allocated memory
         for (int i = 0; i < count; i++)
         {
             free(filenames[i]);
@@ -156,7 +182,7 @@ void do_ls(const char *dir, int l_flag, int x_flag)
     free(filenames);
 }
 
-void print_horizontal_format(char **files, int count, int max_len)
+void print_horizontal_format(const char *dir, char **files, int count, int max_len)
 {
     struct winsize w;
     int term_width = 80;
@@ -175,18 +201,21 @@ void print_horizontal_format(char **files, int count, int max_len)
 
     for (int i = 0; i < count; i++)
     {
+        const char *color = get_color_code(dir, files[i]);
+        int pad = col_width - (int)strlen(files[i]);
+
         if ((i + 1) % cols == 0 || i == count - 1)
         {
-            printf("%s\n", files[i]);
+            printf("%s%s%s\n", color, files[i], COLOR_RESET);
         }
         else
         {
-            printf("%-*s", col_width, files[i]);
+            printf("%s%s%s%*s", color, files[i], COLOR_RESET, pad, "");
         }
     }
 }
 
-void print_column_format(char **files, int count, int max_len)
+void print_column_format(const char *dir, char **files, int count, int max_len)
 {
     struct winsize w;
     int term_width = 80;
@@ -212,13 +241,16 @@ void print_column_format(char **files, int count, int max_len)
             int idx = r + c * rows;
             if (idx < count)
             {
+                const char *color = get_color_code(dir, files[idx]);
+                int pad = col_width - (int)strlen(files[idx]);
+
                 if (c == cols - 1 || idx + rows >= count)
                 {
-                    printf("%s", files[idx]);
+                    printf("%s%s%s", color, files[idx], COLOR_RESET);
                 }
                 else
                 {
-                    printf("%-*s", col_width, files[idx]);
+                    printf("%s%s%s%*s", color, files[idx], COLOR_RESET, pad, "");
                 }
             }
         }
@@ -252,14 +284,18 @@ void print_long_format(const char *path, const char *filename)
     struct tm *time_info = localtime(&info.st_mtime);
     strftime(time_buf, sizeof(time_buf), "%b %d %H:%M", time_info);
 
-    printf("%s %2lu %-8s %-8s %8ld %s %s\n",
+    const char *color = get_color_code(path, filename);
+
+    printf("%s %2lu %-8s %-8s %8ld %s %s%s%s\n",
            mode_str,
            (unsigned long)info.st_nlink,
            owner,
            group,
            (long)info.st_size,
            time_buf,
-           filename);
+           color,
+           filename,
+           COLOR_RESET);
 }
 
 void mode_to_letters(mode_t mode, char str[])

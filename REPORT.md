@@ -104,3 +104,24 @@ In this implementation:
   * Returns `0` if string $A$ equals string $B$.
   * Returns `> 0` if string $A$ follows string $B$.
 * **Why `const void *` arguments:** Generic C interface design requires `void *` so `qsort()` works on arbitrary structures. The `const` modifier ensures `qsort()` does not modify the element memory contents while evaluating comparisons.
+
+
+## Feature 6: Colorized Output (`ls-v1.5.0`)
+
+### Question 1
+**How do ANSI escape sequences work to colorize terminal output? Why is it important to output a "reset" sequence (`\033[0m`) after printing a colored string?**
+
+**Answer:**
+ANSI escape sequences are specific byte sequences (starting with `\033[` or `\x1b[`) interpreted by terminal emulators as display formatting commands rather than printable text. They instruct the terminal driver to alter foreground/background colors or font styles (e.g., `\033[1;34m` sets bold blue foreground).
+
+It is critical to issue the reset sequence (`\033[0m`) immediately after printing a colored entry because terminal styling is **stateful**. Without a reset sequence, all subsequent text printed to the stdout buffer—including shell prompts—would inherit the active color attributes.
+
+---
+
+### Question 2
+**Explain the logic used to determine which color to apply to a given file. How do you check if a file is executable by the current user versus any user?**
+
+**Answer:**
+1. **Type Inspection:** `lstat()` inspects file attributes. S_ISDIR sets Bold Blue, S_ISLNK sets Bold Cyan, S_ISFIFO sets Yellow, and S_ISSOCK sets Bold Magenta.
+2. **Executable Inspection:** If none of the special type macros match, bitwise checks evaluate executable permission flags (`S_IXUSR`, `S_IXGRP`, `S_IXOTH`).
+3. **User vs Global Executable Bit:** Checking `(st_mode & (S_IXUSR | S_IXGRP | S_IXOTH))` evaluates whether *any* user class has execute permission. To strictly verify if the *current user* can execute it, the code would compare `info.st_uid` against `geteuid()`. Standard `ls` colorizers highlight files as executable if any execution bit (`S_IXUSR`, `S_IXGRP`, or `S_IXOTH`) is set.
